@@ -2,6 +2,7 @@
   let currentUser = null;
   let hasClockInForToday = false;
   let pendingRequests = 0;
+  const initialRecordId = (window.APP_CONFIG && window.APP_CONFIG.recordId) || '';
 
   function id(x) { return document.getElementById(x); }
 
@@ -88,7 +89,7 @@
           id('managerBox').hidden = false;
         }
 
-        loadMyMonth(() => detectTodayPunchState());
+        loadMyMonth((rows) => detectTodayPunchState(rows));
         if (!id('managerBox').hidden) loadPending();
 
         showMsg('Dashboard aggiornata.', 'ok');
@@ -130,15 +131,12 @@
       .withSuccessHandler((rows) => {
         id('myRows').innerHTML = rows.map((r) => `
           <tr>
-            <td data-label="Data">${r.data || ''}</td>
-            <td data-label="Entrata">${r.entrata || ''}</td>
-            <td data-label="Uscita">${r.uscita || ''}</td>
-            <td data-label="Pausa">${r.pausa || 0}</td>
-            <td data-label="Causale">${r.causale || ''}</td>
-            <td data-label="Ore">${r.ore || 0}</td>
-            <td data-label="Ordinarie">${r.ord || 0}</td>
-            <td data-label="Straordinario">${r.stra || 0}</td>
-            <td data-label="Stato">${r.stato || ''}</td>
+            <td data-label="Giorno">${r.data || ''}</td>
+            <td data-label="Timbrature">
+              <a class="history-link" href="${buildDetailUrl(r.id)}">
+                ${(r.entrata || '--:--')} - ${(r.uscita || '--:--')}
+              </a>
+            </td>
           </tr>`).join('');
 
         if (typeof onDone === 'function') onDone(rows);
@@ -149,6 +147,72 @@
         setLoading(false);
       })
       .getMyMonthData(month);
+  }
+
+  function buildDetailUrl(recordId) {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    return `${base}?recordId=${encodeURIComponent(recordId)}`;
+  }
+
+  function loadRecordDetail(recordId) {
+    if (!recordId) return;
+    setLoading(true, 'Caricamento dettaglio timbratura...');
+
+    google.script.run
+      .withSuccessHandler((record) => {
+        renderRecordDetail(record);
+        showDetailPage(true);
+        setLoading(false);
+      })
+      .withFailureHandler((e) => {
+        showMsg(e.message || String(e), 'err');
+        setLoading(false);
+      })
+      .getMyRecordDetail(recordId);
+  }
+
+  function renderRecordDetail(record) {
+    const values = [
+      ['Data', record.data],
+      ['Dipendente', record.nomeDipendente],
+      ['Email dipendente', record.emailDipendente],
+      ['Entrata', record.entrata || '-'],
+      ['Uscita', record.uscita || '-'],
+      ['Pausa minuti', record.pausa || 0],
+      ['Causale', record.causale || '-'],
+      ['Note', record.note || '-'],
+      ['Ore lavorate', record.ore || 0],
+      ['Ore ordinarie', record.ord || 0],
+      ['Ore straordinario', record.stra || 0],
+      ['Stato', record.stato || '-'],
+      ['Responsabile', record.responsabileEmail || '-'],
+      ['Creato il', record.creatoIl || '-'],
+      ['Aggiornato il', record.aggiornatoIl || '-'],
+      ['Approvato da', record.approvatoDa || '-'],
+      ['Approvato il', record.approvatoIl || '-'],
+      ['Motivo rifiuto', record.motivoRifiuto || '-']
+    ];
+
+    id('detailRows').innerHTML = values.map(([label, value]) => `
+      <div class="detail-row">
+        <strong>${label}</strong>
+        <span>${value}</span>
+      </div>
+    `).join('');
+  }
+
+  function showDetailPage(visible) {
+    const detailVisible = !!visible;
+    id('detailBox').hidden = !detailVisible;
+    id('managerBox').hidden = detailVisible || !['responsabile', 'admin'].includes(currentUser?.ruolo || '');
+    document.querySelectorAll('.container > .card').forEach((card) => {
+      if (card.id === 'detailBox') return;
+      card.hidden = detailVisible;
+    });
+  }
+
+  function goBackToDashboard() {
+    window.location.href = `${window.location.origin}${window.location.pathname}`;
   }
 
   function detectTodayPunchState(rows) {
@@ -235,6 +299,10 @@
   window.onload = () => {
     id('data').value = nowDateISO();
     setPunchButtons(false);
+    if (initialRecordId) {
+      loadRecordDetail(initialRecordId);
+      return;
+    }
     loadDashboard();
   };
 </script>

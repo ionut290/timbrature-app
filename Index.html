@@ -46,7 +46,7 @@
 
         <div class="actions">
           <button id="saveDraftBtn" class="secondary" type="button" onclick="saveRecord('BOZZA')">Salva bozza</button>
-          <button id="sendBtn" type="button" onclick="saveRecord('INVIATO')">Invia al responsabile</button>
+          <button id="sendBtn" type="button" onclick="saveRecord('INVIATO')">Convalida dati</button>
         </div>
 
         <p id="esito" class="msg" role="status" aria-live="polite"></p>
@@ -62,19 +62,20 @@
           <table class="responsive-table">
             <thead>
               <tr>
-                <th>Data</th>
-                <th>Entrata</th>
-                <th>Uscita</th>
-                <th>Pausa</th>
-                <th>Causale</th>
-                <th>Ore</th>
-                <th>Ordinarie</th>
-                <th>Straordinario</th>
-                <th>Stato</th>
+                <th>Giorno</th>
+                <th>Timbrature</th>
               </tr>
             </thead>
             <tbody id="myRows"></tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="card" id="detailBox" hidden>
+        <h2>Dettaglio timbratura</h2>
+        <div id="detailRows" class="detail-list"></div>
+        <div class="actions">
+          <button type="button" class="secondary" onclick="goBackToDashboard()">Torna allo storico</button>
         </div>
       </div>
 
@@ -99,5 +100,10 @@
     </div>
 
     <?!= include('Scripts'); ?>
+    <script>
+      window.APP_CONFIG = {
+        recordId: <?!= JSON.stringify(recordId || '') ?>
+      };
+    </script>
   </body>
 </html>

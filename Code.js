@@ -3,9 +3,11 @@ const SHEET_TIMBRATURE = 'Timbrature';
 const SHEET_CAUSALI = 'Causali';
 const SHEET_REGOLE = 'Regole';
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
+function doGet(e) {
+  const tpl = HtmlService.createTemplateFromFile('Index');
+  tpl.recordId = (e && e.parameter && e.parameter.recordId) ? String(e.parameter.recordId) : '';
+
+  return tpl.evaluate()
     .setTitle('Timbrature')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -316,6 +318,53 @@ function getPendingForManager(yyyyMm) {
   }
 
   return out;
+}
+
+function getMyRecordDetail(recordId) {
+  const email = getSessionUser_();
+  const me = getEmployeeByEmail_(email);
+  const sh = getSheet_(SHEET_TIMBRATURE);
+  const rows = sh.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[0]) !== String(recordId)) continue;
+
+    const ownerEmail = String(r[2] || '').toLowerCase().trim();
+    const responsabileEmail = String(r[14] || '').toLowerCase().trim();
+    const isOwner = ownerEmail === email;
+    const isAdmin = me.ruolo === 'admin';
+    const isAssignedManager = me.ruolo === 'responsabile' && responsabileEmail === email;
+
+    if (!isOwner && !isAdmin && !isAssignedManager) {
+      throw new Error('Non autorizzato a visualizzare questa timbratura.');
+    }
+
+    return {
+      id: r[0],
+      data: r[1],
+      emailDipendente: r[2],
+      idDipendente: r[3],
+      nomeDipendente: r[4],
+      entrata: r[5],
+      uscita: r[6],
+      pausa: r[7],
+      causale: r[8],
+      note: r[9],
+      ore: r[10],
+      ord: r[11],
+      stra: r[12],
+      stato: r[13],
+      responsabileEmail: r[14],
+      creatoIl: r[15],
+      aggiornatoIl: r[16],
+      approvatoDa: r[17],
+      approvatoIl: r[18],
+      motivoRifiuto: r[19]
+    };
+  }
+
+  throw new Error('Timbratura non trovata.');
 }
 
 function approveRecord(idRecord, approve, motivo) {
