@@ -133,12 +133,19 @@
       .withSuccessHandler((rows) => {
         id('myRows').innerHTML = rows.map((r) => `
           <tr>
-            <td data-label="Giorno">${r.data || ''}</td>
-            <td data-label="Timbrature">
+            <td data-label="Data">
               <a class="history-link" href="${buildDetailUrl(r.id)}">
-                ${(r.entrata || '--:--')} - ${(r.uscita || '--:--')}
+                ${r.data || ''}
               </a>
             </td>
+            <td data-label="Entrata">${r.entrata || '--:--'}</td>
+            <td data-label="Uscita">${r.uscita || '--:--'}</td>
+            <td data-label="Pausa">${r.pausa || 0}</td>
+            <td data-label="Causale">${r.causale || '-'}</td>
+            <td data-label="Ore">${r.ore || 0}</td>
+            <td data-label="Ordinarie">${r.ord || 0}</td>
+            <td data-label="Straordinario">${r.stra || 0}</td>
+            <td data-label="Stato">${r.stato || '-'}</td>
           </tr>`).join('');
 
         if (typeof onDone === 'function') onDone(rows);
