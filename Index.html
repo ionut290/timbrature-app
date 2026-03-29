@@ -99,11 +99,11 @@
       </div>
     </div>
 
-    <?!= include('Scripts'); ?>
     <script>
       window.APP_CONFIG = {
         recordId: <?!= JSON.stringify(recordId || '') ?>
       };
     </script>
+    <?!= include('Scripts'); ?>
   </body>
 </html>

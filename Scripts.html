@@ -2,7 +2,9 @@
   let currentUser = null;
   let hasClockInForToday = false;
   let pendingRequests = 0;
-  const initialRecordId = (window.APP_CONFIG && window.APP_CONFIG.recordId) || '';
+  function getInitialRecordId() {
+    return (window.APP_CONFIG && window.APP_CONFIG.recordId) || '';
+  }
 
   function id(x) { return document.getElementById(x); }
 
@@ -299,6 +301,7 @@
   window.onload = () => {
     id('data').value = nowDateISO();
     setPunchButtons(false);
+    const initialRecordId = getInitialRecordId();
     if (initialRecordId) {
       loadRecordDetail(initialRecordId);
       return;
