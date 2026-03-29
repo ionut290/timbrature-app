@@ -2,7 +2,9 @@
   let currentUser = null;
   let hasClockInForToday = false;
   let pendingRequests = 0;
-  const initialRecordId = (window.APP_CONFIG && window.APP_CONFIG.recordId) || '';
+  function getInitialRecordId() {
+    return (window.APP_CONFIG && window.APP_CONFIG.recordId) || '';
+  }
 
   function id(x) { return document.getElementById(x); }
 
@@ -131,12 +133,19 @@
       .withSuccessHandler((rows) => {
         id('myRows').innerHTML = rows.map((r) => `
           <tr>
-            <td data-label="Giorno">${r.data || ''}</td>
-            <td data-label="Timbrature">
+            <td data-label="Data">
               <a class="history-link" href="${buildDetailUrl(r.id)}">
-                ${(r.entrata || '--:--')} - ${(r.uscita || '--:--')}
+                ${r.data || ''}
               </a>
             </td>
+            <td data-label="Entrata">${r.entrata || '--:--'}</td>
+            <td data-label="Uscita">${r.uscita || '--:--'}</td>
+            <td data-label="Pausa">${r.pausa || 0}</td>
+            <td data-label="Causale">${r.causale || '-'}</td>
+            <td data-label="Ore">${r.ore || 0}</td>
+            <td data-label="Ordinarie">${r.ord || 0}</td>
+            <td data-label="Straordinario">${r.stra || 0}</td>
+            <td data-label="Stato">${r.stato || '-'}</td>
           </tr>`).join('');
 
         if (typeof onDone === 'function') onDone(rows);
@@ -299,6 +308,7 @@
   window.onload = () => {
     id('data').value = nowDateISO();
     setPunchButtons(false);
+    const initialRecordId = getInitialRecordId();
     if (initialRecordId) {
       loadRecordDetail(initialRecordId);
       return;
