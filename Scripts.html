@@ -1,0 +1,252 @@
+<script>
+  let currentUser = null;
+  let hasClockInForToday = false;
+
+  function id(x) { return document.getElementById(x); }
+
+  function nowDateISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function nowTimeHHMM() {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  }
+
+  function setPunchButtons(inProgress) {
+    hasClockInForToday = !!inProgress;
+    id('clockInBtn').disabled = hasClockInForToday;
+    id('clockOutBtn').disabled = !hasClockInForToday;
+  }
+
+  function showMsg(message, type = 'ok') {
+    id('esito').className = `msg ${type}`;
+    id('esito').textContent = message;
+  }
+
+  function setUserBox(user) {
+    id('userBox').innerHTML = `<strong>${user.nome}</strong> (${user.ruolo}) - ${user.email}`;
+  }
+
+  function initCausali(causali) {
+    id('causale').innerHTML = causali
+      .map(c => `<option value="${c.codice}">${c.codice} - ${c.descrizione}</option>`)
+      .join('');
+  }
+
+  function loadDashboard() {
+    google.script.run
+      .withSuccessHandler((res) => {
+        currentUser = res.user;
+        setUserBox(res.user);
+        id('data').value = res.today;
+        initCausali(res.causali);
+
+        const now = new Date();
+        id('mese').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        if (['responsabile', 'admin'].includes(res.user.ruolo)) {
+          id('managerBox').hidden = false;
+        }
+
+        loadMyMonth();
+        loadMyMonth(() => detectTodayPunchState());
+        if (!id('managerBox').hidden) loadPending();
+      })
+      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .getDashboard();
+  }
+
+  function collectPayload(stato) {
+    return {
+      data: id('data').value,
+      entrata: id('entrata').value,
+      uscita: id('uscita').value,
+      pausaMinuti: id('pausa').value,
+      causale: id('causale').value,
+      note: id('note').value,
+      stato
+    };
+  }
+
+  function saveRecord(stato) {
+  function saveRecord(stato, onDone) {
+    google.script.run
+      .withSuccessHandler((res) => {
+        showMsg(`Salvato. Ore: ${res.calcolo.worked}, Ordinarie: ${res.calcolo.ord}, Straordinario: ${res.calcolo.stra}`, 'ok');
+        loadMyMonth();
+        loadMyMonth(() => detectTodayPunchState());
+        if (!id('managerBox').hidden) loadPending();
+        if (typeof onDone === 'function') onDone(res);
+      })
+      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .createOrUpdateDay(collectPayload(stato));
+  }
+
+  function loadMyMonth() {
+  function loadMyMonth(onDone) {
+    const month = id('mese').value;
+    google.script.run
+      .withSuccessHandler((rows) => {
+        id('myRows').innerHTML = rows.map(r => `
+          <tr>
+            <td data-label="Data">${r.data || ''}</td>
+            <td data-label="Entrata">${r.entrata || ''}</td>
+            <td data-label="Uscita">${r.uscita || ''}</td>
+            <td data-label="Pausa">${r.pausa || 0}</td>
+            <td data-label="Causale">${r.causale || ''}</td>
+            <td data-label="Ore">${r.ore || 0}</td>
+            <td data-label="Ordinarie">${r.ord || 0}</td>
+            <td data-label="Straordinario">${r.stra || 0}</td>
+            <td data-label="Stato">${r.stato || ''}</td>
+          </tr>`).join('');
+        if (typeof onDone === 'function') onDone(rows);
+      })
+      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .getMyMonthData(month);
+  }
+
+  function detectTodayPunchState(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const today = id('data').value || nowDateISO();
+    const todayRow = list.find((r) => String(r.data || '') === today);
+
+    if (todayRow?.entrata) id('entrata').value = todayRow.entrata;
+    if (todayRow?.uscita) id('uscita').value = todayRow.uscita;
+    if (!todayRow?.entrata) id('entrata').value = '';
+    if (!todayRow?.uscita) id('uscita').value = '';
+
+    setPunchButtons(Boolean(todayRow?.entrata && !todayRow?.uscita));
+  }
+
+  function clockIn() {
+    id('data').value = nowDateISO();
+    id('entrata').value = nowTimeHHMM();
+    id('uscita').value = '';
+    setPunchButtons(true);
+    saveRecord('BOZZA');
+  }
+
+  function clockOut() {
+    if (!hasClockInForToday) {
+      showMsg('Prima premi Entrata.', 'err');
+      return;
+    }
+    id('uscita').value = nowTimeHHMM();
+    saveRecord('INVIATO', () => setPunchButtons(false));
+  }
+
+  function loadPending() {
+    const month = id('mese').value;
+    google.script.run
+      .withSuccessHandler((rows) => {
+        id('pendingRows').innerHTML = rows.map(r => `
+          <tr>
+            <td data-label="Data">${r.data}</td>
+            <td data-label="Dipendente">${r.dipendente}</td>
+            <td data-label="Causale">${r.causale}</td>
+            <td data-label="Ore">${r.ore}</td>
+            <td data-label="Stato">${r.stato}</td>
+            <td data-label="Azioni" class="actions-cell">
+              <button onclick="approve('${r.id}', true)">Approva</button>
+              <button class="secondary" onclick="approve('${r.id}', false)">Rifiuta</button>
+            </td>
+          </tr>`).join('');
+      })
+      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .getPendingForManager(month);
+  }
+
+  function approve(idRecord, approved) {
+    let motivo = '';
+    if (!approved) {
+      motivo = prompt('Motivo rifiuto:', 'Dati non corretti') || 'Rifiutato';
+    }
+
+    google.script.run
+      .withSuccessHandler(() => {
+        showMsg('Operazione completata.', 'ok');
+        loadPending();
+        loadMyMonth();
+      })
+      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .approveRecord(idRecord, approved, motivo);
+  }
+
+  window.onload = loadDashboard;
+  window.onload = () => {
+    id('data').value = nowDateISO();
+    setPunchButtons(false);
+    loadDashboard();
+  };
+</script>
+apps-script/Styles.html
+apps-script/Styles.html
++15
+-0
+
+@@ -56,50 +56,65 @@
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 16px;
+  }
+
+  button {
+    cursor: pointer;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+  }
+
+  button.secondary {
+    background: var(--secondary);
+  }
+
+  .actions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .punch-actions {
+    margin-top: 0;
+    margin-bottom: 10px;
+  }
+  .clock-in {
+    background: #16a34a;
+  }
+  .clock-out {
+    background: #dc2626;
+  }
+  .clock-out:disabled,
+  .clock-in:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .inline-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin-top: 8px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    border: 1px solid var(--line);
+    padding: 8px;
+    font-size: 12px;
+    text-align: left;
+  }
