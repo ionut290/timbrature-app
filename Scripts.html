@@ -1,6 +1,7 @@
 <script>
   let currentUser = null;
   let hasClockInForToday = false;
+  let pendingRequests = 0;
 
   function id(x) { return document.getElementById(x); }
 
@@ -13,15 +14,39 @@
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   }
 
-  function setPunchButtons(inProgress) {
-    hasClockInForToday = !!inProgress;
-    id('clockInBtn').disabled = hasClockInForToday;
-    id('clockOutBtn').disabled = !hasClockInForToday;
+  function showMsg(message, type = 'ok') {
+    const esito = id('esito');
+    if (!esito) return;
+    esito.className = `msg ${type}`;
+    esito.textContent = message || '';
   }
 
-  function showMsg(message, type = 'ok') {
-    id('esito').className = `msg ${type}`;
-    id('esito').textContent = message;
+  function setLoading(isLoading, message = 'Caricamento in corso...') {
+    pendingRequests = Math.max(0, pendingRequests + (isLoading ? 1 : -1));
+    const loading = pendingRequests > 0;
+
+    document.querySelectorAll('button').forEach((btn) => {
+      if (loading) {
+        btn.dataset.prevDisabled = btn.disabled ? '1' : '0';
+        btn.disabled = true;
+      } else {
+        const prev = btn.dataset.prevDisabled;
+        if (prev === '0') btn.disabled = false;
+        delete btn.dataset.prevDisabled;
+      }
+    });
+
+    if (loading) showMsg(message, 'info');
+  }
+
+  function setPunchButtons(inProgress) {
+    hasClockInForToday = !!inProgress;
+    const inBtn = id('clockInBtn');
+    const outBtn = id('clockOutBtn');
+    if (!inBtn || !outBtn) return;
+
+    inBtn.disabled = hasClockInForToday;
+    outBtn.disabled = !hasClockInForToday;
   }
 
   function setUserBox(user) {
@@ -30,31 +55,8 @@
 
   function initCausali(causali) {
     id('causale').innerHTML = causali
-      .map(c => `<option value="${c.codice}">${c.codice} - ${c.descrizione}</option>`)
+      .map((c) => `<option value="${c.codice}">${c.codice} - ${c.descrizione}</option>`)
       .join('');
-  }
-
-  function loadDashboard() {
-    google.script.run
-      .withSuccessHandler((res) => {
-        currentUser = res.user;
-        setUserBox(res.user);
-        id('data').value = res.today;
-        initCausali(res.causali);
-
-        const now = new Date();
-        id('mese').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-        if (['responsabile', 'admin'].includes(res.user.ruolo)) {
-          id('managerBox').hidden = false;
-        }
-
-        loadMyMonth();
-        loadMyMonth(() => detectTodayPunchState());
-        if (!id('managerBox').hidden) loadPending();
-      })
-      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
-      .getDashboard();
   }
 
   function collectPayload(stato) {
@@ -69,26 +71,64 @@
     };
   }
 
-  function saveRecord(stato) {
+  function loadDashboard() {
+    setLoading(true, 'Caricamento dashboard...');
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        currentUser = res.user;
+        setUserBox(res.user);
+        id('data').value = res.today;
+        initCausali(res.causali);
+
+        const now = new Date();
+        id('mese').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        if (['responsabile', 'admin'].includes(res.user.ruolo)) {
+          id('managerBox').hidden = false;
+        }
+
+        loadMyMonth(() => detectTodayPunchState());
+        if (!id('managerBox').hidden) loadPending();
+
+        showMsg('Dashboard aggiornata.', 'ok');
+        setLoading(false);
+      })
+      .withFailureHandler((e) => {
+        showMsg(e.message || String(e), 'err');
+        setLoading(false);
+      })
+      .getDashboard();
+  }
+
   function saveRecord(stato, onDone) {
+    const actionLabel = stato === 'INVIATO' ? 'Invio in corso...' : 'Salvataggio in corso...';
+    setLoading(true, actionLabel);
+
     google.script.run
       .withSuccessHandler((res) => {
         showMsg(`Salvato. Ore: ${res.calcolo.worked}, Ordinarie: ${res.calcolo.ord}, Straordinario: ${res.calcolo.stra}`, 'ok');
-        loadMyMonth();
-        loadMyMonth(() => detectTodayPunchState());
+        loadMyMonth((rows) => detectTodayPunchState(rows));
         if (!id('managerBox').hidden) loadPending();
         if (typeof onDone === 'function') onDone(res);
+        setLoading(false);
       })
-      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .withFailureHandler((e) => {
+        showMsg(e.message || String(e), 'err');
+        setLoading(false);
+      })
       .createOrUpdateDay(collectPayload(stato));
   }
 
-  function loadMyMonth() {
   function loadMyMonth(onDone) {
     const month = id('mese').value;
+    if (!month) return;
+
+    setLoading(true, 'Aggiornamento storico...');
+
     google.script.run
       .withSuccessHandler((rows) => {
-        id('myRows').innerHTML = rows.map(r => `
+        id('myRows').innerHTML = rows.map((r) => `
           <tr>
             <td data-label="Data">${r.data || ''}</td>
             <td data-label="Entrata">${r.entrata || ''}</td>
@@ -100,9 +140,14 @@
             <td data-label="Straordinario">${r.stra || 0}</td>
             <td data-label="Stato">${r.stato || ''}</td>
           </tr>`).join('');
+
         if (typeof onDone === 'function') onDone(rows);
+        setLoading(false);
       })
-      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .withFailureHandler((e) => {
+        showMsg(e.message || String(e), 'err');
+        setLoading(false);
+      })
       .getMyMonthData(month);
   }
 
@@ -111,10 +156,8 @@
     const today = id('data').value || nowDateISO();
     const todayRow = list.find((r) => String(r.data || '') === today);
 
-    if (todayRow?.entrata) id('entrata').value = todayRow.entrata;
-    if (todayRow?.uscita) id('uscita').value = todayRow.uscita;
-    if (!todayRow?.entrata) id('entrata').value = '';
-    if (!todayRow?.uscita) id('uscita').value = '';
+    id('entrata').value = todayRow?.entrata || '';
+    id('uscita').value = todayRow?.uscita || '';
 
     setPunchButtons(Boolean(todayRow?.entrata && !todayRow?.uscita));
   }
@@ -132,15 +175,20 @@
       showMsg('Prima premi Entrata.', 'err');
       return;
     }
+
     id('uscita').value = nowTimeHHMM();
     saveRecord('INVIATO', () => setPunchButtons(false));
   }
 
   function loadPending() {
     const month = id('mese').value;
+    if (!month) return;
+
+    setLoading(true, 'Caricamento approvazioni...');
+
     google.script.run
       .withSuccessHandler((rows) => {
-        id('pendingRows').innerHTML = rows.map(r => `
+        id('pendingRows').innerHTML = rows.map((r) => `
           <tr>
             <td data-label="Data">${r.data}</td>
             <td data-label="Dipendente">${r.dipendente}</td>
@@ -148,12 +196,17 @@
             <td data-label="Ore">${r.ore}</td>
             <td data-label="Stato">${r.stato}</td>
             <td data-label="Azioni" class="actions-cell">
-              <button onclick="approve('${r.id}', true)">Approva</button>
-              <button class="secondary" onclick="approve('${r.id}', false)">Rifiuta</button>
+              <button type="button" onclick="approve('${r.id}', true)">Approva</button>
+              <button type="button" class="secondary" onclick="approve('${r.id}', false)">Rifiuta</button>
             </td>
           </tr>`).join('');
+
+        setLoading(false);
       })
-      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .withFailureHandler((e) => {
+        showMsg(e.message || String(e), 'err');
+        setLoading(false);
+      })
       .getPendingForManager(month);
   }
 
@@ -163,90 +216,25 @@
       motivo = prompt('Motivo rifiuto:', 'Dati non corretti') || 'Rifiutato';
     }
 
+    setLoading(true, approved ? 'Approvazione in corso...' : 'Rifiuto in corso...');
+
     google.script.run
       .withSuccessHandler(() => {
         showMsg('Operazione completata.', 'ok');
         loadPending();
         loadMyMonth();
+        setLoading(false);
       })
-      .withFailureHandler((e) => showMsg(e.message || String(e), 'err'))
+      .withFailureHandler((e) => {
+        showMsg(e.message || String(e), 'err');
+        setLoading(false);
+      })
       .approveRecord(idRecord, approved, motivo);
   }
 
-  window.onload = loadDashboard;
   window.onload = () => {
     id('data').value = nowDateISO();
     setPunchButtons(false);
     loadDashboard();
   };
 </script>
-apps-script/Styles.html
-apps-script/Styles.html
-+15
--0
-
-@@ -56,50 +56,65 @@
-    min-height: 44px;
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    font-size: 16px;
-  }
-
-  button {
-    cursor: pointer;
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    font-weight: 600;
-  }
-
-  button.secondary {
-    background: var(--secondary);
-  }
-
-  .actions {
-    margin-top: 12px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .punch-actions {
-    margin-top: 0;
-    margin-bottom: 10px;
-  }
-  .clock-in {
-    background: #16a34a;
-  }
-  .clock-out {
-    background: #dc2626;
-  }
-  .clock-out:disabled,
-  .clock-in:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  .inline-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-
-  .table-wrap {
-    overflow-x: auto;
-    margin-top: 8px;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th, td {
-    border: 1px solid var(--line);
-    padding: 8px;
-    font-size: 12px;
-    text-align: left;
-  }
