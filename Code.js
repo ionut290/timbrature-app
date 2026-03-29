@@ -19,7 +19,10 @@ function include(filename) {
 function getSessionUser_() {
   const email = Session.getActiveUser().getEmail();
   if (!email) {
-    throw new Error('Utente non riconosciuto. Verifica accesso con account Google aziendale.');
+    throw new Error(
+      'Utente non riconosciuto. Pubblica la Web App come "Esegui come: Utente che accede" ' +
+      'e "Chi ha accesso: Solo dominio" (o utenti autenticati), poi accedi con account Google aziendale.'
+    );
   }
   return email.toLowerCase().trim();
 }
