@@ -215,6 +215,33 @@
     color: var(--info-text);
   }
 
+  .history-link {
+    color: #1d4ed8;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .history-link:hover {
+    text-decoration: underline;
+  }
+
+  .detail-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .detail-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 8px;
+    border-bottom: 1px solid #e5eaf1;
+    padding-bottom: 8px;
+  }
+
+  .detail-row strong {
+    color: #334155;
+  }
+
   @media (max-width: 780px) {
     .container {
       padding: 10px;
@@ -238,6 +265,11 @@
     th,
     td {
       font-size: 12px;
+    }
+
+    .detail-row {
+      grid-template-columns: 1fr;
+      gap: 4px;
     }
   }
 </style>
