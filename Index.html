@@ -7,10 +7,14 @@
   </head>
   <body>
     <div class="container">
-      <h1>Timbrature Aziendali</h1>
+      <header class="hero">
+        <p class="hero-kicker">Dashboard operativa</p>
+        <h1>Timbrature Aziendali</h1>
+        <p class="hero-subtitle">Registra, monitora e approva le giornate lavorative in un unico spazio.</p>
+      </header>
       <div class="card" id="userBox"></div>
 
-      <div class="card">
+      <div class="card card-gradient">
         <h2>Nuova timbratura / giornata</h2>
 
         <div class="actions punch-actions">
@@ -78,7 +82,7 @@
         </div>
       </div>
 
-      <div class="card" id="detailBox" hidden>
+      <div class="card card-detail" id="detailBox" hidden>
         <h2>Dettaglio timbratura</h2>
         <div id="detailRows" class="detail-list"></div>
         <div class="actions">
@@ -86,7 +90,7 @@
         </div>
       </div>
 
-      <div class="card" id="managerBox" hidden>
+      <div class="card card-manager" id="managerBox" hidden>
         <h2>Approvazioni (responsabile/admin)</h2>
         <div class="table-wrap">
           <table class="responsive-table">
